@@ -1,6 +1,6 @@
 from datetime import datetime
 from uuid import uuid4
-from fastapi import APIRouter, Body, HTTPException, status
+from fastapi import APIRouter, Body, HTTPException, status, Query
 from pydantic import UUID4
 
 from workout_api.atleta.schemas import AtletaIn, AtletaOut, AtletaUpdate
@@ -10,6 +10,8 @@ from workout_api.centro_treinamento.models import CentroTreinamentoModel
 
 from workout_api.contrib.dependencies import DatabaseDependency
 from sqlalchemy.future import select
+
+from typing import Optional
 
 router = APIRouter()
 
@@ -79,12 +81,24 @@ async def query(db_session: DatabaseDependency) -> list[AtletaOut]:
     '/{id}', 
     summary='Consulta um Atleta pelo id',
     status_code=status.HTTP_200_OK,
-    response_model=AtletaOut,
+    response_model=list[AtletaOut],
 )
-async def get(id: UUID4, db_session: DatabaseDependency) -> AtletaOut:
-    atleta: AtletaOut = (
-        await db_session.execute(select(AtletaModel).filter_by(id=id))
-    ).scalars().first()
+async def get(
+    db_session: DatabaseDependency,
+    nome: Optional[str] = Query(None, description="Filtrar pelo nome do atleta"),
+    cpf: Optional[str] = Query(None, description="Filtrar pelo CPF do Atleta"),
+) -> list[AtletaOut]:
+    query = select(AtletaModel)
+
+    if nome:
+        query = query.filter(AtletaModel.nome.ilike(f"%{nome}%"))
+    if cpf:
+        query = query.filter(AtletaModel.cpf == cpf)
+    
+
+    atleta: list[AtletaOut] = (
+        await db_session.execute(select(query))
+    ).scalars().all()
 
     if not atleta:
         raise HTTPException(
